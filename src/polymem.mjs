@@ -1463,33 +1463,201 @@ const SECTION_MAP = Object.assign(Object.create(null), {
 });
 const MAX_LINES_PER_SECTION = 20;
 
+// ONE length rule for every bullet in every section. This used to be two:
+// a bullet over 300 chars was DISCARDED, and anything kept was truncated to
+// 200. Measured against the persona simulation: dropped at 301/400/1200,
+// silently shortened at 201/299/300, up to 1901 characters gone with no counter
+// anywhere. Two thresholds for one field is not a policy, it is an oversight,
+// and the gap between them (201-300) was shortening nobody was told about.
+//
+// Reconciled to a single 300-char cap that TRUNCATES and never drops. The
+// direction is deliberate: these are cases where real model output was being
+// DISCARDED, so the fix has to keep more, not reject more. A verbose bot keeps
+// a shortened version of its bullet instead of losing it outright. The bound is
+// still real — a model can emit a single-line bullet of 2000 characters with no
+// spaces in it — and this only decides whether the text ARRIVES; whether it is
+// a usable pattern name is the gate's judgement, further downstream.
+//
+// Truncation is counted in diagnostics rather than applied quietly. A silent
+// shortening is the same defect as a silent drop, one character count smaller.
+const MAX_BULLET_CHARS = 300;
+
+// THE FENCE IS ANCHORED TO A LINE, and this is the fix for the simulation's
+// worst finding: three personas wrote a valid memory block and the index
+// received NOTHING, with parseMemoryBlock returning a well-formed but empty
+// memory object and no error anywhere.
+//
+// THE BUG. The opener was located with `text.indexOf('```memory')` — the first
+// occurrence of that substring ANYWHERE, including inside prose. A model that
+// QUOTES the opener hits it first, the body regex then runs from that prose
+// position, finds no section headers in the quoted fragment, and returns an
+// empty memory object. The real block further down is never parsed at all.
+//
+// NOT CONTRIVED. The simulation's own fence-contract prompt contains the literal
+// string "```memory" inside its instruction text ("a fenced block that begins
+// with ```memory on its own line"), so every persona was told the opener's
+// spelling; any persona that restates the instruction writes it into prose. The
+// harness manufactured its own trigger.
+//
+// The second harm was worse and went unreported: `display` is the text BEFORE
+// the opener, so a quoted opener also TRUNCATED THE USER-FACING ANSWER
+// mid-sentence. The caller saw a short, confident, complete-looking reply and an
+// empty memory.
+//
+// THE RULE. An opener is a line whose only content is ```memory (leading or
+// trailing whitespace is fine — Markdown indents fences in nested content). A
+// quoted mention mid-sentence is not an opener, because it is not on its own
+// line. Among the openers that survive, the LAST one that actually yields
+// bullets wins: the documented contract is "End your reply with EXACTLY ONE
+// fenced block" and "Do not put text after the closing fence", so the block is
+// at the end. Taking the last opener that yields content also means a model
+// that shows a worked EXAMPLE of the format, then writes its real memory, keeps
+// the real memory.
+//
+// KNOWN LIMITATION, stated rather than hidden: if a model writes a real block
+// and then, violating the contract, appends ANOTHER block, the later one wins.
+// Both readings are guesses about a contract the model broke; this one is at
+// at least consistent with the contract as documented. The regex that follows is
+// declared inside findMemoryFence, per-call, because of its `lastIndex` state.
+
+function findMemoryFence(text) {
+  // The regex is CONSTRUCTED HERE, not held at module scope. A `g`-flagged regex
+  // carries mutable `lastIndex` state, and a shared one is a reentrancy bug
+  // waiting to happen: two overlapping parseMemoryBlock calls would trample each
+  // other's cursor and the second would silently find fewer openers. A
+  // per-call literal costs nothing measurable in a per-response parse path.
+  const openers = [];
+  const re = /^[ \t]*```memory[ \t]*$/gm;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    // A zero-length match cannot happen here (the pattern is never empty), but
+    // guard anyway: an infinite loop in a per-response parse path is a worse
+    // outcome than a missed block.
+    if (m.index === re.lastIndex) re.lastIndex++;
+    openers.push(m.index);
+  }
+  if (!openers.length) return null;
+
+  // Extract the body of the block starting at `at`: everything up to the next
+  // closing fence, or to the end of the reply if the model never closed it.
+  const bodyAt = (at) => {
+    const body = text.slice(at).match(/```memory[ \t]*\n([\s\S]*?)(?:```|$)/);
+    return body ? body[1] : '';
+  };
+
+  let chosen = openers[openers.length - 1];
+  for (let i = openers.length - 1; i >= 0; i--) {
+    const body = bodyAt(openers[i]);
+    // "Yields a bullet" means a line that would survive into a section — cheap
+    // to approximate here: any line that starts a bullet or names a known
+    // section. An empty-but-valid block still wins as the fallback, so a model
+    // that writes a real block and then an EMPTY one keeps the real memory.
+    const useful = body.split('\n').some((l) => {
+      const t = l.trim();
+      if (SECTION_MAP[(t.match(/^[ \t]*#{1,6}[ \t]*([A-Za-z][\w-]*)/) || [])[1]?.toLowerCase() || '']) return true;
+      return t.startsWith('-') || t.startsWith('*');
+    });
+    if (useful) { chosen = openers[i]; break; }
+  }
+  return { at: chosen, body: bodyAt(chosen), openers };
+}
+
 export function parseMemoryBlock(raw) {
   const text = String(raw || '');
-  const fenceAt = text.indexOf('```memory');
-  if (fenceAt === -1) return { display: text.trim(), memory: null };
-  const display = text.slice(0, fenceAt).trim();
-  const bodyMatch = text.slice(fenceAt).match(/```memory\s*\n([\s\S]*?)(?:```|$)/);
+  const fence = findMemoryFence(text);
+  if (!fence) return { display: text.trim(), memory: null, diagnostics: freshDiagnostics(0) };
+  const display = text.slice(0, fence.at).trim();
   const memory = { claims: [], patterns: [], correspondences: [], contradictions: [] };
-  if (bodyMatch) {
-    let current = null;
-    for (const line of bodyMatch[1].split('\n')) {
-      const header = line.match(/^###\s+(\w+)/);
-      if (header) { current = SECTION_MAP[header[1].toLowerCase()] || null; continue; }
-      if (!current || !line.trim().startsWith('-')) continue;
-      if (memory[current].length >= MAX_LINES_PER_SECTION) continue;
-      let item = line.trim().slice(1).trim();
-      if (!item || item.length > 300) continue;
-      let domains = [];
-      const dom = item.match(/\s+—\s+domains?:\s*(.+)$/);
-      if (dom) {
-        item = item.slice(0, dom.index).trim();
-        domains = dom[1].split(',').map(normalizeDomain).filter(d => d);
+  const diagnostics = freshDiagnostics(fence.openers.length);
+
+  // `current` is a SECTION NAME, and `sectionState` says whether we have one at
+  // all, because "no header yet" and "a header we do not recognise" are
+  // different failures and a caller needs to tell them apart: the first means
+  // the model wrote bullets before naming a section, the second that it named a
+  // section this version does not have.
+  let current = null;
+  let sectionState = 'none';
+  for (const line of fence.body.split('\n')) {
+    // A header may be INDENTED. `  ### Claims` is a Claims section; Markdown
+    // indentation does not make it a different one, and requiring column 0 threw
+    // away real memory from any model that nests its block.
+    const header = line.match(/^[ \t]*#{1,6}[ \t]*([A-Za-z][\w-]*)(.*)$/);
+    if (header) {
+      const name = header[1].toLowerCase();
+      current = SECTION_MAP[name] || null;
+      sectionState = current ? 'known' : 'unknown';
+      if (sectionState === 'unknown' && !diagnostics.unknownSections.includes(header[1])) {
+        // Recorded with the spelling the model actually used, not lowercased.
+        // This is a diagnostic an operator reads to learn what to add, so
+        // "Observations" is more use than "observations".
+        diagnostics.unknownSections.push(header[1]);
       }
-      if (current === 'claims' || current === 'patterns') memory[current].push({ text: item.slice(0, 200), domains });
-      else memory[current].push(item.slice(0, 200));
+      // A BULLET GLUED TO ITS HEADER — `### Claims - the date guard lives at
+      // assertDateStr`. Taking only the header kept the section and dropped the
+      // fact, which is the worst of both outcomes: a claim that exists in the
+      // model output and in no section at all. The remainder is handled as the
+      // first line of the section it just opened.
+      const tail = (header[2] || '').trim();
+      if (tail.startsWith('-') || tail.startsWith('*')) {
+        addBullet(tail, line);
+      }
+      continue;
     }
+    if (!line.trim().startsWith('-') && !line.trim().startsWith('*')) continue;
+    addBullet(line.trim(), line);
   }
-  return { display, memory };
+
+  function addBullet(trimmed, _rawLine) {
+    const body = trimmed.slice(1).trim();
+    if (!body) { diagnostics.droppedEmpty++; return; }
+    if (sectionState === 'none') { diagnostics.droppedNoSection++; return; }
+    if (sectionState === 'unknown') { diagnostics.droppedUnknownSection++; return; }
+    if (memory[current].length >= MAX_LINES_PER_SECTION) { diagnostics.droppedOverSectionCap++; return; }
+
+    let item = body;
+    // Domains are extracted BEFORE the length cap. Cutting first would slice the
+    // " — domains: …" suffix off the end of a long bullet and file the pattern
+    // with no domain, which is what holds it below `established` forever.
+    let domains = [];
+    const dom = item.match(/\s+—\s+domains?:\s*(.+)$/);
+    if (dom) {
+      item = item.slice(0, dom.index).trim();
+      domains = dom[1].split(',').map(normalizeDomain).filter(d => d);
+    }
+    if (item.length > MAX_BULLET_CHARS) {
+      item = item.slice(0, MAX_BULLET_CHARS);
+      diagnostics.truncated++;
+    }
+    if (current === 'claims' || current === 'patterns') memory[current].push({ text: item, domains });
+    else memory[current].push(item);
+  }
+
+  return { display, memory, diagnostics };
+}
+
+// EVERY DROP ON THE INTAKE PATH IS COUNTED HERE.
+//
+// The filed finding said a caller "cannot distinguish a bot that wrote nothing
+// from a bot whose bullets were all dropped", and that sentence is the whole
+// defect: the loss is invisible. The memory object is still returned as a
+// well-formed object, because that shape is the documented contract, but the
+// reason it is empty now travels with it.
+//
+// This is the same standard meta.patternGate and meta.claimGate already meet —
+// a rejected name is recorded with its reason so an operator can ask "what was
+// dropped and why" instead of finding a hole. Extending it to the PARSE side
+// closes the last silent gap on the way in. `truncated` in particular is what
+// turns the old silent 200-char shortening into something a caller can see.
+function freshDiagnostics(fenceOpeners) {
+  return {
+    fenceOpeners,
+    truncated: 0,
+    droppedEmpty: 0,
+    droppedNoSection: 0,
+    droppedUnknownSection: 0,
+    droppedOverSectionCap: 0,
+    unknownSections: [],
+  };
 }
 
 // ── Session working memory (date-as-session, file-backed) ──────────────────
@@ -1529,7 +1697,35 @@ export function parseMemoryBlock(raw) {
 // The regex matches the documented contract (a YYYY-MM-DD session key) and
 // cannot be satisfied by any string containing a path separator, so it closes
 // the traversal structurally rather than by enumerating bad inputs.
+//
+// IT ALSO HAS TO BE A REAL DAY, because the date is not only a key but a
+// FILENAME. Measured (hostile:date-traversal): 2026-13-45, 2026-02-30, 9999-99-99
+// and 0000-00-00 all satisfy the regex above and were all accepted, producing
+// session files that no caller asking for a real day will ever find. "Which
+// sessions ran on the 30th" silently omits the 2026-02-30 session. There is no
+// containment risk here — the file still lands inside the sessions dir — which
+// is why the simulation filed this LOW, and it is cheap enough that shipping the
+// parser fixes alone would have left an obvious hole next to them.
+//
+// Real calendar arithmetic, not a range check: 2024-02-29 is accepted (leap
+// year) and 2026-02-29 is not (it is not). Reconstructing the date and reading
+// the field back is the only version of this that gets leap years and month
+// lengths right; the alternative — rejecting month > 12 and day > 31 — is the
+// check that already let 2026-02-30 through.
+//
+// Still throwing, still refusing, still the same error shape. The traversal
+// guard above runs first, so the separators are still rejected structurally and
+// the message still names the expected format.
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isRealCalendarDay(y, mo, d) {
+  if (mo < 1 || mo > 12 || d < 1) return false;
+  // Day 0 of month mo+1 is the last day of month mo, so the Date constructor
+  // enforces month length and leap years for us. Months outside 1-12 are already
+  // rejected above, so this cannot silently roll into the next year.
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  return probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d;
+}
 
 function assertDateStr(dateStr) {
   if (typeof dateStr !== 'string' || !DATE_RE.test(dateStr)) {
@@ -1537,6 +1733,17 @@ function assertDateStr(dateStr) {
       `invalid session date ${JSON.stringify(String(dateStr))}: expected YYYY-MM-DD ` +
       '(e.g. "2026-09-30"). The date is used as a filename, so anything containing ' +
       'a path separator would write or read outside the sessions directory.');
+  }
+  // Year 0 is excluded with the calendar check rather than separately: there is
+  // no day zero in the proleptic Gregorian calendar, so Date.UTC(0, ...) rolls
+  // back to 1 BC and the round-trip comparison below fails. That is the correct
+  // outcome for "0000-00-00", which is a placeholder, not a date.
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  if (!isRealCalendarDay(y, mo, d)) {
+    throw new Error(
+      `invalid session date ${JSON.stringify(dateStr)}: matches YYYY-MM-DD but ` +
+      `${mo}/${d} is not a real day in ${y}. The date is used as a filename, so an ` +
+      'impossible date creates a session file that no caller can ever look up.');
   }
   return dateStr;
 }
@@ -2179,9 +2386,60 @@ export function promoteSession(dateStr, index) {
   // index.meta.patternGate with its reason, so the operator can see what was
   // dropped and why — the same auditability the quarantine record itself
   // demanded and could not get.
-  const gateStats = (index.meta.patternGate ||= { accepted: 0, rejected: 0, byReason: {} });
-  for (const e of working.entries) {
-    for (const p of e.patterns || []) {
+  // THE LOOP HEAD IS THE WHOLE DEFECT, and it is four throws, not one.
+  //
+  // The filed reproduction was `patterns: [null]` -> TypeError reading 'text'
+  // at the `assessPatternName(p.text)` call below, which violates the
+  // never-throw contract parseMemoryBlock documents three hundred lines above.
+  // MEASURED, on the same loop head and against the real module:
+  //
+  //   patterns: [null]            TypeError: Cannot read properties of null (reading 'text')
+  //   patterns: [undefined]       TypeError: Cannot read properties of null (reading 'text')
+  //   entries: [null]             TypeError: Cannot read properties of null (reading 'patterns')
+  //   entries: not an array       TypeError: working.entries.reduce is not a function
+  //   entries: missing            TypeError: working.entries is not iterable
+  //   contradictions: not an array TypeError (at the stats block below)
+  //
+  // The existing `e.patterns || []` guard protects the ARRAY and nothing else,
+  // which is why only the innermost of these was ever found: the array is fine,
+  // its ELEMENTS are not. A half-written session file, a hand-edited one, or one
+  // written by a different version reaches this loop long before anyone gets
+  // around to a null pattern element, and it takes down the whole promotion.
+  //
+  // Every skip is COUNTED beside the rejections that were already being counted.
+  // That is the part that makes this a fix rather than a try/catch: a skipped
+  // element is now as visible in meta.patternGate as a rejected name, so an
+  // operator can ask "what was dropped and why" and get an answer. Swallowing
+  // the TypeError would have made the crash stop and the data loss invisible.
+  const gateStats = (index.meta.patternGate ||= {
+    accepted: 0, rejected: 0, skipped: 0, byReason: {},
+  });
+  // Older indexes on disk predate `skipped`, so backfill rather than assume —
+  // an existing index must not report `undefined` where every test now expects a
+  // number.
+  if (typeof gateStats.skipped !== 'number') gateStats.skipped = 0;
+  if (!gateStats.byReason) gateStats.byReason = {};
+  const skipMalformed = (reason) => {
+    gateStats.skipped++;
+    gateStats.byReason[reason] = (gateStats.byReason[reason] || 0) + 1;
+  };
+
+  // `working.entries` is read from a file on disk and is therefore not ours to
+  // trust. Anything that is not an array of objects is skipped and counted,
+  // never iterated blindly.
+  const entries = Array.isArray(working && working.entries) ? working.entries : [];
+  if (!Array.isArray(working && working.entries)) skipMalformed('malformed-entries');
+  for (const e of entries) {
+    if (!e || typeof e !== 'object') { skipMalformed('malformed-entry'); continue; }
+    const patterns = Array.isArray(e.patterns) ? e.patterns : [];
+    if (e.patterns !== undefined && !Array.isArray(e.patterns)) skipMalformed('malformed-patterns-field');
+    for (const p of patterns) {
+      // The element itself must be an object with a string name. `123` and
+      // `"bare"` reach the gate as valid-but-rejected names today; they still
+      // do, because that path is handled downstream and rejecting is right. What
+      // must never happen is a nullish ELEMENT reaching `.text`.
+      if (!p || typeof p !== 'object') { skipMalformed('malformed-pattern'); continue; }
+      if (typeof p.text !== 'string') { skipMalformed('malformed-pattern'); continue; }
       const verdict = assessPatternName(p.text);
       if (!verdict.accept) {
         gateStats.rejected++;
@@ -2367,8 +2625,16 @@ export function promoteSession(dateStr, index) {
   trustStats.lastSession = dateStr;
 
   // session-level correspondences attach to the referenced pattern (flat list, no graph edges)
-  for (const e of working.entries) {
-    for (const corr of e.correspondences || []) {
+  //
+  // The SAME guard as the pattern loop above, for the same reason: this is a
+  // second pass over the same untrusted file, and `entries: [null]` reached here
+  // as "Cannot read properties of null (reading 'correspondences')" after the
+  // first pass had already been fixed. A nullish ENTRY must not throw wherever it
+  // is encountered, so both passes iterate the sanitised `entries` array.
+  for (const e of entries) {
+    if (!e || typeof e !== 'object') continue;
+    const corrs = Array.isArray(e.correspondences) ? e.correspondences : [];
+    for (const corr of corrs) {
       const m = String(corr).match(/(?:↔|corresponds to)\s*(.+?)(?:\s+in\s+\w+)?$/i);
       if (!m) continue;
       // Same compatibility requirement as the promotion path: a correspondence
@@ -2383,8 +2649,10 @@ export function promoteSession(dateStr, index) {
   // decompositionStats side had visibility, this side did not.
   const st = index.meta.contradictionStats || (index.meta.contradictionStats = { sessionsChecked: 0, claimsChecked: 0, flagsRaised: 0 });
   st.sessionsChecked++;
-  st.claimsChecked += working.entries.reduce((n, e) => n + (e.claims?.length || 0), 0);
-  st.flagsRaised += working.contradictions.length;
+  st.claimsChecked += entries.reduce((n, e) => n + (e && e.claims && e.claims.length ? e.claims.length : 0), 0);
+  // `working.contradictions` comes off disk too, so it gets the same treatment
+  // the entries loop above got: a non-array must not reach `.length`.
+  st.flagsRaised += Array.isArray(working && working.contradictions) ? working.contradictions.length : 0;
   st.lastSession = dateStr;
 
   index.meta.promotions = (index.meta.promotions || 0) + 1;

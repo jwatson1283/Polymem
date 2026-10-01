@@ -124,6 +124,12 @@ export const SUITE_FLOORS = {
   'test-repo-root-containment.mjs':   5,
   'test-session-date-containment.mjs':14,
   'test-working-memory-location.mjs': 7,
+  // Four intake defects from the persona simulation, each proven to fail before
+  // its fix (26 of these 40 assertions failed on the unpatched module). The
+  // floor is the full count because the controls are load-bearing: without them
+  // a parser that returned null for everything would satisfy every "does not
+  // lose memory" assertion in the suite.
+  'test-memory-intake.mjs':          40,
 };
 
 // Net across the whole run. The per-suite floors catch a suite whose

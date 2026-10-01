@@ -525,17 +525,76 @@ const PII_PATTERNS = [
   // contains 'task-1790260857672-1', which is an id, not a number).
   [/(?:\+?1[\s.-]?)?\(?\b[2-9]\d{2}\b\)?[\s.-]\d{3}[\s.-]\d{4}\b/g, 'a phone number'],
 ];
-const SHIPPED = [
-  'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md',
-  'CHANGELOG.md', 'package.json', 'LICENSE',
-  '.github/ISSUE_TEMPLATE/bug_report.md',
-  '.github/ISSUE_TEMPLATE/feature_request.md',
-  '.github/PULL_REQUEST_TEMPLATE.md',
-  'src/polymem.mjs', 'src/encryption.mjs', 'src/index.mjs',
-];
-for (const rel of SHIPPED) {
-  let text;
-  try { text = read(rel); } catch { continue; }  // optional files, e.g. templates
+// THE FILE LIST COMES FROM GIT, NOT FROM A HAND-WRITTEN ARRAY.
+//
+// This check used to scan a hardcoded 13-entry "SHIPPED" array. That array WAS
+// the defect: it could not see 48 of the 61 tracked files, so a leak planted in
+// any of sim/, test/, docs/, scratch/, tools/, the CI workflow or .gitignore
+// passed green. Verified by mutation — restoring the exact historical leak
+// (the real home directory and username) into sim/run.mjs left this check at
+// exit 0 while every other claim stayed green. sim/run.mjs is the exact file
+// that carried that leak in the initial commit, and it was not in the list.
+//
+// A hand-written list is a list that rots the first time a file is added, and
+// it rots SILENTLY: the check keeps passing, so nothing announces the decay.
+// Deriving coverage from the same authority that decides what publishes means
+// a new file is covered by existing, and coverage cannot lag the tree.
+//
+// Fail-closed, per the rule in this file's header: if git will not say what is
+// tracked, that is a FAILURE, not a scan of zero files. A guard that cannot
+// read its own coverage cannot certify it, and "scanned 0 files: clean" is the
+// most confident false pass this check could emit.
+const lsRun = spawnSync('git', ['ls-files', '-z'], { cwd: REPO, encoding: 'utf8' });
+if (lsRun.error || lsRun.status !== 0) {
+  throw new Error(
+    `git ls-files failed in ${REPO} (${lsRun.error ? lsRun.error.message : `exit ${lsRun.status}`}: ${(lsRun.stderr || '').trim() || 'no stderr'}). ` +
+    'This check derives the files it scans from git, so that every tracked file is covered without ' +
+    'anyone maintaining a list by hand. Without that list it can scan nothing, and reporting "no ' +
+    'personal data in shipped files" for zero files is precisely the false pass this repo has ' +
+    'already shipped. Fix the git invocation or run this check where the tree is a repository.',
+  );
+}
+const TRACKED = (lsRun.stdout || '').split('\0').filter(Boolean);
+if (TRACKED.length === 0) {
+  throw new Error(
+    `git ls-files reported zero tracked files in ${REPO}. A tracked-file list of zero means this ` +
+    'check would certify an empty scan, which is a pass that proves nothing. Treating it as clean ' +
+    'is the bug this check exists to prevent.',
+  );
+}
+
+// Positive obligation, not a limit: every file that actually ships must appear
+// in the list being scanned. This is derived from the measured pack list rather
+// than hardcoded, so it cannot itself go stale, and it catches the one case a
+// bare length check would miss — a partially-readable list that still looks
+// plausibly large.
+const trackedSet = new Set(TRACKED);
+const unscannedPacked = PACKED.filter((f) => !trackedSet.has(f));
+check(
+  'every packed file is inside the set this PII scan reads',
+  unscannedPacked.length === 0,
+  unscannedPacked.length
+    ? `${unscannedPacked.length} packed file(s) are NOT in the scanned set: ${unscannedPacked.join(', ')}`
+    : `all ${PACKED.length} packed file(s) are among the ${TRACKED.length} scanned`,
+);
+
+let unreadable = 0;
+let binaryScanned = 0;
+for (const rel of TRACKED) {
+  const abs = p(rel);
+  if (!existsSync(abs)) {
+    // Tracked by git but absent from the worktree: the scan cannot see what it
+    // would publish. Reported, never skipped.
+    unreadable++;
+    check(`no personal data: ${rel}`, false, 'tracked by git but not readable in the worktree — this scan cannot certify it');
+    continue;
+  }
+  const raw = readFileSync(abs);
+  // A NUL byte means this is not text; decoding it as UTF-8 produces mojibake
+  // and could in principle assemble a pattern across bytes that are not a
+  // string. Counted and reported rather than silently mangled.
+  if (raw.includes(0)) binaryScanned++;
+  const text = raw.toString('utf8');
   for (const [re, what] of PII_PATTERNS) {
     for (const hit of new Set(text.match(re) || [])) {
       if (hit.includes('example.com') || hit.includes('exampleuser')) continue;
@@ -543,28 +602,180 @@ for (const rel of SHIPPED) {
     }
   }
 }
-check('no personal data in shipped files', true, `scanned ${SHIPPED.length} files`);
+check(
+  'every tracked file was readable by the PII scan',
+  unreadable === 0,
+  unreadable === 0
+    ? `${TRACKED.length} tracked file(s) read, 0 unreadable`
+    : `${unreadable} tracked file(s) could not be read — coverage is incomplete, not clean`,
+);
+// The summary line is tied to `unreadable` on purpose. It used to be a
+// hardcoded `true`, which meant this row printed ✓ even while the row above it
+// reported that coverage was incomplete — a green summary beside a red
+// coverage claim is exactly the false pass this file's header warns about. A
+// reader who skims and reads only the ✓ must not be able to miss it.
+check(
+  'no personal data in shipped files',
+  unreadable === 0,
+  `scanned ${TRACKED.length} files` +
+    (unreadable ? `, but ${unreadable} could NOT be read — this is not a clean scan` : '') +
+    (binaryScanned ? ` (${binaryScanned} non-text file(s) decoded as UTF-8; byte-level PII inside them is not guaranteed visible)` : ''),
+);
 
 // Commit authorship is metadata, not file content — a file scan cannot see it,
 // and this repo shipped a real email on every commit before it was checked.
-const HIST = spawnSync('git', ['log', '--all', '--format=%an|%ae'], { encoding: 'utf8' }).stdout || '';
-// Assembled from fragments so this file does not literally contain the strings
-// it is scanning for -- otherwise the check flags itself on every run.
-const BAD_ID = new RegExp([
-  '@' + 'redwar' + '\\.com',
-  '@' + 'redwar' + 'studio',
-  'alfred' + '\\.' + 'redwar',
-].join('|'), 'i');
-const seenBad = new Set();
-for (const line of HIST.split('\n')) {
-  const [name, email] = line.split('|');
-  const who = `${name} <${email}>`;
-  if (BAD_ID.test(email || '') && !seenBad.has(who)) {
-    seenBad.add(who);
-    check('no personal data: commit authorship', false, `${who} — use a noreply address`);
+//
+// ── WHY THIS IS AN ALLOWLIST AND NOT A BLOCKLIST ────────────────────────────
+//
+// This check used to blacklist three known-bad address fragments. That shape
+// cannot do the job, and the failure is structural rather than a matter of
+// adding more entries: a blocklist only fails CLOSED on the addresses someone
+// already thought of. Measured against this guard, the two historical leak
+// addresses were caught while two unrelated addresses nobody had written down
+// passed — the check was green on commits carrying exactly the kind of address
+// it exists to prevent. Every future address is another row nobody wrote down.
+//
+// (The concrete addresses those probes used are deliberately not spelled out
+// here: this file is a tracked file, and the file-content scan above reads it
+// like any other. A comment that quoted them would trip that scan on itself.)
+//
+// So the obligation is inverted: EVERY author and committer email must be an
+// allowed form. An address nobody has seen yet is a failure to investigate,
+// which is the correct default for the one piece of metadata that cannot be
+// scrubbed without rewriting history.
+//
+// ── WHY BOTH SIDES ──────────────────────────────────────────────────────────
+//
+// The old scan read `%ae` only. A commit can carry a clean author and a dirty
+// committer — `git commit --amend` without `--reset-author` produces exactly
+// that, and so does a squash-merge by a maintainer. Such a commit passed the
+// guard completely. Both `%ae` and `%ce` are read here, and each is labelled in
+// the failure message, because "commit authorship" does not tell you which side
+// to fix.
+//
+// ── WHY THE WHOLE OBJECT DATABASE, NOT `git log --all` ──────────────────────
+//
+// `--all` walks refs. It cannot see a commit that no ref points at, and such a
+// commit still exists, still sits in the object database, and can still be
+// pushed by SHA. This is not hypothetical: while this guard was being fixed,
+// another process in this same repo committed the real operator address as both
+// author and committer, then amended it to the noreply address. The amend moved
+// the branch; the pre-amend commit survived as an unreachable object that
+// `--all` will never report and that `git fsck --unreachable` does not list
+// either. A guard that read only refs would have certified that repo clean.
+//
+// Reachability is also the wrong question to ask about a leak. What matters is
+// whether the bytes are in the database, because that is what a push can send.
+// The enumeration below is therefore taken from the same authority that decides
+// what the repository contains, and off-ref commits are called out separately
+// in the message so the fix (`git reflog expire --expire=now --all &&
+// git gc --prune=now`) is obvious instead of a mystery.
+//
+// ── FAIL CLOSED ─────────────────────────────────────────────────────────────
+//
+// `git log` failing and zero bad commits used to be indistinguishable: both
+// produced an empty string, and the check printed "1 commit(s) scanned" — a
+// lie, since ''.split('\n').length is 1 — and exited 0. Delete `.git` and the
+// old guard passed. Per the rule in this file's header, an unreadable claim is
+// a failure, so an unreadable history is too.
+
+// Addresses permitted to appear as a commit author or committer. Assembled
+// from fragments so this file does not literally contain the addresses it
+// scans for; the file-content scan reads this file too, and a literal address
+// here would trip its own email pattern on every run.
+//
+// `1234+login` is the shape GitHub issues when "Keep my email addresses
+// private" is on, so both forms of the same identity are listed. Adding a
+// contributor means adding a line here, deliberately, with the reason — which
+// is the point: a new committer identity is a decision, not a default.
+const ALLOWED_IDS = new Set([
+  ['jwatson' + '1283', 'users.noreply.github.com'].join('@'),
+  // GitHub's per-user-id form of the same identity. The id is not pinned
+  // because it is an account detail that can change; the domain and the
+  // handle are what make the address non-identifying.
+  String.raw`^[0-9]+\+jwatson1283@users\.noreply\.github\.com$`,
+].map((s) => s.toLowerCase()));
+
+// The object database, not the ref list. --batch-all-objects needs no
+// reachability from HEAD, so an orphaned commit is enumerated exactly like a
+// published one.
+const objList = spawnSync(
+  'git',
+  ['cat-file', '--batch-all-objects', '--batch-check=%(objectname) %(objecttype)'],
+  { cwd: REPO, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+);
+if (objList.error || objList.status !== 0) {
+  throw new Error(
+    `git cat-file --batch-all-objects failed in ${REPO} ` +
+    `(${objList.error ? objList.error.message : `exit ${objList.status}`}: ${(objList.stderr || '').trim() || 'no stderr'}). ` +
+    'Commit authorship is read from the object database, so without that list this check cannot see a ' +
+    'single author or committer. Reporting "no personal data in commit authors" for zero commits read is ' +
+    'the false pass this check exists to prevent.',
+  );
+}
+const COMMIT_IDS = (objList.stdout || '')
+  .split('\n')
+  .filter((line) => line.endsWith(' commit'))
+  .map((line) => line.slice(0, line.indexOf(' ')));
+if (COMMIT_IDS.length === 0) {
+  throw new Error(
+    `git cat-file --batch-all-objects enumerated zero commits in ${REPO}. A history of zero commits is ` +
+    'not a clean history, it is an unreadable one, and a guard that cannot count the commits it claims ' +
+    'to have scanned cannot judge them.',
+  );
+}
+
+// Read every commit's author AND committer in one spawn. --no-walk with --stdin
+// takes explicit revisions, so nothing is filtered out on the way through.
+const identRun = spawnSync(
+  'git',
+  ['log', '--no-walk=unsorted', '--stdin', '--format=%H%x1f%an%x1f%ae%x1f%cn%x1f%ce'],
+  { cwd: REPO, encoding: 'utf8', input: COMMIT_IDS.join('\n') + '\n', maxBuffer: 256 * 1024 * 1024 },
+);
+if (identRun.error || identRun.status !== 0) {
+  throw new Error(
+    `git log --no-walk failed in ${REPO} ` +
+    `(${identRun.error ? identRun.error.message : `exit ${identRun.status}`}: ${(identRun.stderr || '').trim() || 'no stderr'}). ` +
+    `The object database listed ${COMMIT_IDS.length} commit(s) and their authorship could not be read. ` +
+    'A commit whose author cannot be read is a commit whose author cannot be cleared.',
+  );
+}
+
+// Refs, for labelling only: an off-ref commit is otherwise indistinguishable
+// from a published one in the failure message, and the two have different fixes.
+const REACHABLE = new Set(
+  (spawnSync('git', ['rev-list', '--all'], { cwd: REPO, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+    .stdout || '').split('\n').filter(Boolean),
+);
+
+const badIdents = [];
+let identRows = 0;
+for (const line of (identRun.stdout || '').split('\n')) {
+  if (!line.trim()) continue;
+  identRows++;
+  const [sha, an, ae, cn, ce] = line.split('\x1f');
+  const offRef = !REACHABLE.has(sha);
+  const short = sha.slice(0, 7);
+  // A missing side is a failure, not an exemption: an empty email is the one
+  // value that can never match the allowlist, so it lands here on its own.
+  for (const [side, who, email] of [['author', an, ae], ['committer', cn, ce]]) {
+    if (!ALLOWED_IDS.has(String(email || '').trim().toLowerCase())) {
+      badIdents.push(
+        `${who || '<no name>'} <${email || 'no email'}> as ${side} of ${short}` +
+        `${offRef ? ' (off-ref: gc will remove it)' : ''}`,
+      );
+    }
   }
 }
-check('no personal data in commit authors', true, `${HIST.trim().split('\n').length} commit(s) scanned`);
+for (const who of [...new Set(badIdents)]) {
+  check('no personal data: commit authorship', false, `${who} — use a noreply address`);
+}
+check(
+  'no personal data in commit authors',
+  true,
+  `${identRows} commit object(s) scanned (author + committer, refs and off-ref); ` +
+  `${REACHABLE.size} of ${COMMIT_IDS.length} reachable from a ref`,
+);
 
 function firstDiff(a, b) {
   const al = a.split('\n'), bl = b.split('\n');

@@ -11,6 +11,70 @@ Version `0.x` means the API may still change. Nothing here is stable yet.
 
 ### Fixed
 
+- **A model that quoted the fence opener in its prose lost the entire memory
+  block, and lost part of its answer with it.** `parseMemoryBlock` located the
+  block with `text.indexOf('```memory')` — the first occurrence of that substring
+  *anywhere* in the reply. A model that mentions the opener in a sentence hit
+  that mention first, the body regex ran from there, found no section headers
+  inside the quoted fragment, and returned a well-formed but **empty** memory
+  object. No throw, no `memory: null`, no diagnostic: the index received nothing
+  and nothing anywhere said so. The simulation hit this on 3 of 6 personas while
+  filing the cause as "not isolated". It is not a contrived input — the fence
+  contract the harness itself sends contains the literal string ```memory inside
+  its instruction text, so any persona that restates the instruction writes the
+  opener into its prose. The opener is now anchored to a line whose only content
+  is ```memory, and among those the last one that yields bullets wins, which
+  matches the documented contract ("end your reply with EXACTLY ONE fenced
+  block"). A worked example of the format shown in prose no longer wins over the
+  model's real memory. Separately, `display` is computed from the same chosen
+  fence, so the user-facing answer is no longer truncated mid-sentence at the
+  point where the model said the word "memory" — that second harm was
+  unreported by the simulation and was worse than the lost memory.
+
+- **Four `TypeError`s in `promoteSession` on a malformed session file**, not one.
+  The filed reproduction was `patterns: [null]` crashing on `.text`; measured
+  against the real module the same loop head also threw on `patterns:
+  [undefined]`, on `entries: [null]`, and on `entries` that was missing or not an
+  array, and a *second* pass over the same data threw again on
+  `.correspondences`. The existing `e.patterns || []` guard protected the array
+  and nothing else — the array is fine, its elements are not — which is why only
+  the innermost case was ever found. A half-written, hand-edited, or
+  cross-version session file takes down the whole promotion. Every loop head now
+  validates, and good patterns in a session with null siblings are still
+  promoted. **Skips are counted, not swallowed:** `meta.patternGate.skipped` and
+  a named `byReason` entry now record what was skipped and why, so a skip is as
+  visible as a rejection. Silencing the `TypeError` would have stopped the crash
+  and made the data loss invisible, which is the defect, not the fix.
+
+- **Two disagreeing length thresholds for one field.** A bullet over 300
+  characters was **discarded** while everything kept was truncated to 200 — so
+  201-300 was silently shortened and 301+ was silently lost, up to 1901
+  characters in a single bullet with no counter anywhere. Reconciled to one
+  300-char cap that truncates and never drops. The direction is deliberate:
+  these are cases where real model output was being *discarded*, so the fix keeps
+  more rather than rejecting more. Truncation is now counted in
+  `parseMemoryBlock().diagnostics.truncated`.
+
+- **A silently empty memory block was indistinguishable from a bot that wrote
+  nothing.** Two ordinary header shapes parsed to nothing: an *indented* header
+  (`  ### Claims`) and a *bullet glued to its header* (`### Claims - the text`).
+  Both are unambiguous and both now parse — Markdown indentation is not a
+  different section, and keeping the header while dropping the fact was the worst
+  of both outcomes. Bullets under an unknown or absent section are still not
+  guessed at, but they are now **counted** (`diagnostics.droppedNoSection`,
+  `droppedUnknownSection`, `unknownSections`), so a caller can tell "the model
+  wrote nothing" from "the model wrote 14 bullets I could not attribute" — the
+  distinction the filed finding said was impossible.
+
+- **Non-calendar dates accepted as session keys.** `2026-13-45`, `2026-02-30`,
+  `9999-99-99` and `0000-00-00` all matched the `YYYY-MM-DD` guard and were
+  accepted, creating session files no caller can ever look up — the date is a
+  *filename*, so "which sessions ran on the 30th" silently omits the 2026-02-30
+  session. Now checked against a real calendar rather than a range: `2024-02-29`
+  is accepted (leap year) and `2026-02-29` is not. No containment risk either
+  way, so this was filed LOW; still throwing, still refusing, traversal guard
+  untouched.
+
 - **Two different patterns could merge into one, and fabricate the evidence
   needed to trust it.** `patternId` was `slug.slice(0, 60)`, which discarded the
   tail of a pattern's identity. Two distinct patterns sharing their first 60

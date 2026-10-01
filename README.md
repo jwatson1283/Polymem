@@ -304,7 +304,7 @@ none
 • Unique temp path plus rename makes a write atomic under concurrency
   status=candidate  evidenceCount=1  domains=code,ops  score=4
 
---- the index file on disk (first 40 lines of 96) ---
+--- the index file on disk (first 40 lines of 97) ---
 {
   "version": 1,
   "patterns": {
@@ -968,7 +968,7 @@ zero dependencies.
 ## Status
 
 Polymem runs in production inside OmegaShell. It processes real agent output,
-promotes real patterns, and serves real queries. It has 508 assertions across 15
+promotes real patterns, and serves real queries. It has 548 assertions across 16
 suites and CI on Node 18 and 20.
 
 That number is not maintained by hand. `npm run docs:check` fails if it drifts.
