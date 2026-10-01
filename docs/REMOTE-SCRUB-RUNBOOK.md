@@ -52,7 +52,7 @@ The 31 commits exist nowhere else (`a1f9915` is **not** in `~/Projects/Polymem`,
 different 34-commit history). Before asking for approval I took a backup:
 
 ```
-~/backups/polymem-REMOTE-preDelete-20260930.bundle   (clone-tested)
+~/backups/polymem-REMOTE-preDelete-20261001.bundle   (clone-tested)
   git bundle verify  -> okay, "records a complete history", 4 refs
   git clone <bundle> -> 31 commits, HEAD a1f9915 readable WITHOUT the remote
 ```
@@ -102,7 +102,7 @@ rm -rf /tmp/pm-postverify
 git clone https://github.com/jwatson1283/Polymem.git /tmp/pm-postverify
 cd /tmp/pm-postverify
 git rev-list --count --all                                  # expect 2
-git log --all --format='%ae' | sort -u                      # expect ONLY jwatson1283@users.noreply.github.com
+git log --all --format='%ae' | sort -u                      # expect ONLY the noreply address (no real/work email)
 git cat-file -e a1f9915 2>/dev/null && echo "OLD COMMIT STILL FETCHABLE" || echo "old commit gone"
 npm test                                                     # suite green in the clone
 ```
