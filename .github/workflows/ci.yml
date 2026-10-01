@@ -1,0 +1,69 @@
+# CI for polymem. Dependency-free by design.
+#
+# The repo has zero runtime and zero dev dependencies, so this workflow adds
+# no install step, no linter, and no coverage gate. It exists for one reason:
+# before this file, .github/workflows/ was EMPTY, so nothing ran the suite
+# automatically and the first person to push a broken commit got no signal at
+# all. A green check that only happens when a human remembers to run it is not
+# a check.
+#
+# Node 18 and 20 because package.json declares engines.node ">=18". The floor
+# of a declared range is the version most likely to be quietly broken, so it is
+# the one that must be tested. 20 is the current LTS line.
+#
+# On the runner contract: the one command that matters is `npm test`, which is
+# `node test/run-tests.mjs`. It exits non-zero when a suite's assertions fail,
+# when a suite reports fewer assertions than its floor in test/suite-floors.mjs
+# (including the empty-suite case, where it reports no count at all), or when
+# the run totals fall under 440 assertions / 14 suites. Verified to exit 1
+# against broken copies and 0 against a good one; see the commit message for
+# the transcripts. GitHub Actions needs no extra step to honour that — a
+# non-zero exit from a `run:` step fails the job.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+# A new push makes an in-flight run on the same ref obsolete. Don't burn
+# minutes proving a commit nobody is shipping.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Let a second version's failure report in rather than cancelling the
+      # first; the whole run is ~4s, so there is nothing to save.
+      fail-fast: false
+      matrix:
+        node: ['18', '20']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # No `npm ci` / `npm install`: there is no lockfile and no dependency to
+      # install, so the step would be a no-op that can only fail.
+      - name: Run test suite
+        run: npm test
+
+      # The doc-drift guard, run in CI because a guard nobody runs is
+      # documentation. `npm test` proves the library works; this proves the
+      # README's numbers still describe that library. They drift apart silently
+      # otherwise — which is exactly how the README came to claim 270 assertions
+      # while the suite ran 312.
+      #
+      # Node 18+ only, and it is NOT run across the matrix: it shells out to the
+      # suite itself, so running it twice would double the CI time to re-derive
+      # a number that cannot differ between 18 and 20.
+      - name: Verify documentation claims against reality
+        if: matrix.node == '20'
+        run: npm run docs:check

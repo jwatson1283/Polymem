@@ -1,0 +1,56 @@
+{
+  "name": "polymem",
+  "version": "0.1.0",
+  "description": "Two-tier memory for AI agents: session working memory plus an evidence-gated patterns index. Zero dependencies, no server, JSON on disk.",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "test": "node test/run-tests.mjs",
+    "verify": "node --check src/polymem.mjs && node --check src/index.mjs && npm test",
+    "docs:check": "node tools/check-doc-claims.mjs"
+  },
+  "//files": "Explicit allowlist, not a blocklist. With no 'files' field npm publishes everything not in .gitignore — measured here: 35 files including docs/ design notes, the whole test/ suite, and any scratch directory at the repo root. An allowlist means a new file is excluded by default and has to be added deliberately, so a scratch dir, a fixture, or a real memory file can never ride along into a published tarball. 'files' is npm's mechanism, not .gitignore's: npm ignores .gitignore for the files field.",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "//description": "Was 'Polymathic two-tier memory: decomposition parse, session working memory, patterns index, evidence-gated promotion, pattern query. Zero infra — Markdown + JSON on disk.' Two corrections, both measured against this source tree rather than assumed: (1) 'Markdown' was never true of this library — there are exactly two write call sites (polymem.mjs:448, :619) and both are JSON.stringify, and grep for any .md/Markdown writer returns nothing. The phrase describes OmegaShell's surrounding vault, not this package. (2) 'polymathic' in the first clause is a term this project invented; it tells a stranger searching npm nothing. The description is the field npm shows in search results, so it has to carry the thing a stranger would search for.",
+  "author": "Josh Watson",
+  "//repository": "Points at the repo this package is intended to live in. It does not exist on GitHub yet (api.github.com/repos/jwatson1283/Polymem returns 404 as of 2026-09-30, authenticated as jwatson1283), so this URL is currently unresolvable and npm will render it as a dead link until the repo is created. Kept because the field is required for the package to be findable and linkable at all, and the URL is the one this README and package already commit to. Nothing was pushed and no remote was added.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwatson1283/Polymem.git"
+  },
+  "homepage": "https://github.com/jwatson1283/Polymem#readme",
+  "//bugs": "Derived from the repository URL above, so it inherits the same caveat: unresolvable until the repo exists. Included anyway because npm's bug-report affordance is keyed off it and a package with a repository but no bugs field leaves that empty.",
+  "bugs": {
+    "url": "https://github.com/jwatson1283/Polymem/issues"
+  },
+  "//keywords": "npm matches these as OR, so the list is a recall net, not a ranking. Every term here was checked against the source: 'llm'/'ai'/'agents'/'context' — the package's stated audience (it parses a memory fence an LLM emits); 'long-term-memory'/'llm-memory' — the two-tier design it implements; 'local-first'/'zero-dependencies'/'file-based'/'json' — measured: no dependencies, no devDependencies, no peerDependencies, and src/ imports only node: builtins, so the writes really are plain JSON files; 'patterns'/'pattern-memory' — the patterns index is its only long-term store; 'polymathic' is the project's own coinage and carries no search volume, kept for brand only. Deliberately EXCLUDED: 'mcp' (zero MCP references anywhere in the tree — the package ships no server and speaks no protocol), 'knowledge-graph' (the README states the correspondence layer is flat strings, NOT a queryable graph, so the keyword would contradict the docs), 'embeddings'/'vector-search'/'semantic-search' (queryPatterns is literal substring matching over pattern names and domain tags — see the 'When NOT to use this' section of the README), 'rag' (no retrieval-augmented generation here), 'chatbot'/'conversation' (it stores evidence-gated techniques, not conversation history).",
+  "keywords": [
+    "memory",
+    "agent-memory",
+    "llm-memory",
+    "long-term-memory",
+    "pattern-memory",
+    "patterns",
+    "context",
+    "agents",
+    "llm",
+    "ai",
+    "local-first",
+    "zero-dependencies",
+    "file-based",
+    "json",
+    "polymathic"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

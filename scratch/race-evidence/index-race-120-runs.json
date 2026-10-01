@@ -1,0 +1,11 @@
+{
+  "commit": "a770582 (pre-fix: no index lock)",
+  "runs": 120,
+  "writers": 8,
+  "observed_range": "1-7 of 8",
+  "mode": "3/8",
+  "mode_count": 50,
+  "distribution": {"1": 6, "2": 22, "3": 50, "4": 30, "5": 9, "6": 2, "7": 1},
+  "every_writer_reported_saved_true": true,
+  "parse_failures": 0
+}

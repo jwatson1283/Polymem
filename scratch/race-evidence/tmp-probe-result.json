@@ -1,0 +1,13 @@
+{
+  "commit": "322eb1f~1 (pre-fix: fixed temp path)",
+  "runs": 30,
+  "writers": 5,
+  "patterns_per_writer": 600,
+  "expected": 3000,
+  "patterns_range": "600-2400",
+  "patterns_mode": 1200,
+  "patterns_distribution": "600x1 1200x15 1800x11 2400x3",
+  "writers_represented_range": "1-4",
+  "writers_represented_distribution": "1x1 2x15 3x11 4x3",
+  "parse_failures": 0
+}
