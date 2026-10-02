@@ -4,24 +4,13 @@
 ![Node](https://img.shields.io/badge/node-%3E%3D18-5FA04E.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-success)
 
+[![CI](https://github.com/jwatson1283/Polymem/actions/workflows/ci.yml/badge.svg)](https://github.com/jwatson1283/Polymem/actions/workflows/ci.yml)
+
 <!--
-Two badges are deliberately absent, because both targets 404 today and a broken
-badge reads as neglect rather than as pending.
-
-THE GITHUB BADGE. The repo now exists but is PRIVATE: created 2026-10-01
-15:16:40Z, first push 15:18:38Z, both before this section was last written, and
-`private: true` with `visibility: private` in the API response. Measured
-2026-10-01 11:58 EDT, authenticated as jwatson1283:
-`api.github.com/repos/jwatson1283/Polymem` returns 200. Unauthenticated — which
-is what a badge request and a CI status check are — it returns 404, and so does
-the badge SVG itself. So the badge stays out until the repo is public. Making it
-public is Josh's call and is NOT covered by the "nothing gets published" rule
-here, which covers releases, tags, npm, and announcements.
-
-  ![CI](https://github.com/jwatson1283/Polymem/actions/workflows/ci.yml/badge.svg)
-
-THE NPM BADGE. `npm view polymem` returns E404 — the name is AVAILABLE, the
-registry has no squatter. So:
+  No npm badge: `polymem` is not published yet, so img.shields.io/npm/v/polymem
+  renders a RED "package not found". A broken badge reads as neglect rather
+  than as pending, so it stays out until the package actually exists. Re-add
+  the line below the day `npm publish` happens.
 
   ![npm](https://img.shields.io/npm/v/polymem)
 -->
