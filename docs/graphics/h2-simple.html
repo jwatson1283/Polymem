@@ -1,0 +1,79 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1080px;height:1920px;overflow:hidden;background:#D9D9D4;
+     font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#111716}
+.sheet{width:1080px;height:1920px;padding:52px 52px 40px;position:relative;
+       display:flex;flex-direction:column}
+/* press grain + faint misregistration, per photographic_direction.finish */
+.sheet::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.13;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
+
+.display{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:800;
+  font-size:150px;line-height:.86;letter-spacing:-.045em;text-transform:uppercase;
+  color:#111716}
+.mono{font-family:'SF Mono',Menlo,monospace}
+.meta{font-family:'SF Mono',Menlo,monospace;font-size:17px;line-height:1.42;
+  letter-spacing:.01em;color:#4D504E}
+.lab{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;
+  font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#111716}
+
+.grid{margin-top:26px;display:grid;gap:0;flex:1;
+  grid-template-columns:repeat(4,1fr);grid-auto-rows:min-content}
+.cell{border:1.5px solid #111716;padding:15px 14px 17px;position:relative;
+  display:flex;flex-direction:column;justify-content:flex-start}
+.cell.empty{background:transparent}
+.span2{grid-column:span 2}
+.span4{grid-column:span 4}
+.v{display:flex;flex-direction:column;justify-content:space-between}
+
+.warn{border:3px solid #D71920}
+.warn .lab{color:#D71920}
+.warn .big{font-size:58px;font-weight:800;letter-spacing:-.03em;color:#D71920;
+  font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;line-height:.95}
+
+.strip{height:15px;display:flex;margin-top:16px}
+.strip i{flex:1;display:block}
+.foot{margin-top:14px;display:flex;justify-content:space-between;
+  font-family:'SF Mono',Menlo,monospace;font-size:16px;color:#4D504E}
+
+
+  .row{display:grid;grid-template-columns:1.25fr 1fr 1fr;border:1.5px solid #111716}
+  .row>div{border-right:1.5px solid #111716;padding:20px 18px}
+  .row>div:last-child{border-right:none}
+  .hd{font-size:15px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+      padding-bottom:14px!important}
+  .plain2{font-size:31px;line-height:1.2;font-weight:700;letter-spacing:-.02em}
+  .off{color:#8B8D8A;font-weight:600}
+</style></head><body><div class="sheet">
+  <div class="meta">POLYMEM / SHEET 02</div>
+  <div class="display" style="margin-top:16px;font-size:124px">NOTEBOOK,<br>NOT<br>DATABASE</div>
+
+  <div style="margin-top:30px">
+    <div class="row">
+      <div class="hd"></div><div class="hd">POLYMEM</div><div class="hd">THE OTHERS</div>
+    </div>
+    <div class="row"><div class="hd">WHAT IT HOLDS</div>
+      <div class="plain2">what worked</div>
+      <div class="plain2 off">documents</div></div>
+    <div class="row"><div class="hd">SETUP</div>
+      <div class="plain2">none</div>
+      <div class="plain2 off">a database,<br>an account</div></div>
+    <div class="row"><div class="hd">HAS TO EARN IT</div>
+      <div class="plain2" style="color:#D71920">yes</div>
+      <div class="plain2 off">no</div></div>
+    <div class="row" style="border-bottom:none"><div class="hd">SIZE</div>
+      <div class="plain2" style="color:#D71920">30 kB</div>
+      <div class="plain2 off">hundreds of MB</div></div>
+  </div>
+
+  <div style="margin-top:30px;border:3px solid #D71920;padding:26px 28px">
+    <div class="lab" style="color:#D71920">ONE THING IT CAN'T DO</div>
+    <div style="font-size:33px;line-height:1.32;margin-top:14px;font-weight:600">
+      It looks for the same words. Ask a different way and it finds nothing.</div>
+  </div>
+
+  <div class="strip mono"><i style="background:#111716"></i><i style="background:#D71920"></i>
+    <i style="background:#E1C51A"></i><i style="background:#1C4FA3"></i></div>
+  <div class="foot"><span>github.com/jwatson1283/Polymem</span>
+    <span>IF YOU WANT SEARCH, USE A SEARCH ENGINE.</span></div>
+</div></body></html>

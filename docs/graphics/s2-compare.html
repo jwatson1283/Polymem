@@ -1,0 +1,78 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{width:1080px;height:1920px;overflow:hidden;background:#F2EFE9;
+       font-family:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+       color:#1A1A18}
+  .sheet{width:1080px;height:1920px;padding:104px 96px 150px;display:flex;
+         flex-direction:column;position:relative}
+  .mono{font-family:'SF Mono',Menlo,monospace}
+
+  .kicker{font:600 22px/1 'SF Mono',Menlo,monospace;letter-spacing:.20em;
+          text-transform:uppercase;color:#8A8378}
+  h1{font-size:88px;line-height:1.04;letter-spacing:-.022em;font-weight:600;margin-top:26px}
+  h1 em{font-style:italic;color:#B4462E}
+  .lede{font-size:33px;line-height:1.5;color:#4A463E;margin-top:26px;max-width:790px}
+
+  .rule{height:2px;background:#1A1A18;margin:40px 0}
+  .hair{height:1px;background:#C9C2B4}
+
+  /* the ledger: a real table, not cards */
+  .tbl{margin-top:8px;border-collapse:collapse;width:100%}
+  .tbl th{font:600 20px/1 'SF Mono',Menlo,monospace;letter-spacing:.13em;
+          text-transform:uppercase;color:#8A8378;text-align:left;
+          padding:0 0 16px;border-bottom:2px solid #1A1A18}
+  .tbl td{font-size:28px;line-height:1.34;padding:22px 26px 22px 0;
+          border-bottom:1px solid #C9C2B4;vertical-align:top}
+  .tbl td:first-child{font:600 21px/1.34 'SF Mono',Menlo,monospace;
+          letter-spacing:.02em;color:#4A463E;width:270px}
+  .yes{color:#1A1A18;font-weight:600}
+  .no{color:#9A9284}
+  .mark{color:#B4462E;font-weight:700}
+
+  .foot{margin-top:auto;display:flex;justify-content:space-between;
+        align-items:flex-end;font:600 22px/1.35 'SF Mono',Menlo,monospace;
+        color:#4A463E}
+  .foot .r{text-align:right;max-width:430px}
+
+  .caveat{margin-top:30px;font-size:27px;line-height:1.46;color:#4A463E;
+          border-left:3px solid #1A1A18;padding-left:26px}
+  .caveat b{font-weight:700}
+</style></head><body><div class="sheet">
+  <div class="kicker">Positioning</div>
+  <h1>This is not a<br>competitor. It's<br>the <em>other</em> job.</h1>
+  <div class="lede">Mem0, Hindsight and LangChain memory are retrieval systems. They
+  answer &ldquo;what do we know that resembles this query?&rdquo; Polymem answers
+  &ldquo;which of these have earned trust?&rdquo;</div>
+
+  <div class="rule"></div>
+
+  <table class="tbl">
+    <tr><th></th><th>Polymem</th><th>Mem0 / Hindsight</th><th>LangChain</th></tr>
+    <tr><td>Stores</td>
+        <td class="yes">technique + evidence</td>
+        <td>extracted facts</td><td>arbitrary JSON</td></tr>
+    <tr><td>Embeddings</td>
+        <td class="no">no</td><td class="no">yes</td><td>depends</td></tr>
+    <tr><td>Calls an LLM</td>
+        <td class="yes">no</td><td class="no">yes</td><td>no</td></tr>
+    <tr><td>Infrastructure</td>
+        <td class="yes">none &mdash; JSON files</td>
+        <td>SQL / Postgres</td><td>graph store</td></tr>
+    <tr><td>Multi-user scoping</td>
+        <td class="no">none</td><td class="yes">yes</td><td class="yes">yes</td></tr>
+    <tr><td>Must earn trust</td>
+        <td class="yes">evidence bar</td>
+        <td class="no">not applicable</td><td class="no">not applicable</td></tr>
+    <tr><td>Dependencies</td>
+        <td class="mark">0</td><td>several</td><td>several</td></tr>
+  </table>
+
+  <div class="caveat"><b>The honest catch:</b> they retrieve by meaning; Polymem matches words.
+  Ask it &ldquo;how do I avoid losing writes&rdquo; and you get nothing. That is a real
+  limitation, not a footnote &mdash; and it is the first line of its own README.</div>
+
+  <div class="foot">
+    <div>Polymem &middot; github.com/jwatson1283</div>
+    <div class="r">If your problem is retrieval,<br>use a retrieval system.</div>
+  </div>
+</div></body></html>

@@ -25,6 +25,10 @@ there is nothing to resolve, nothing to audit, nothing to keep current, and
 nothing to install. Your agent's memory is a file. When you want to know what it
 knows, you open it in an editor.
 
+> **New here?** Read [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) first — where
+> this idea came from, how it actually functions step by step, and an honest list
+> of when to use it and when not to. The sections below are the reference.
+
 **Contents**
 - [What this is not](#what-this-is-not) — read this before anything else
 - [Why it exists: it was adversarially audited and it failed](#why-it-exists-it-was-adversarially-audited-and-it-failed)
@@ -561,6 +565,47 @@ cross-domain connection.
 Note that this is a *design intent stated honestly*. The correspondence layer
 exists and stores strings; the cross-domain retrieval that would exploit it is
 not implemented. See above.
+
+### Where the idea came from
+
+It started as a research question, not a product. On 2026-09-23 the Researcher
+was asked to review how AI memory should work, and returned a definition of
+*polymathic cognition* that reframed the question. The load-bearing line, from
+Don Gunter's April 2026 essay *The Polymathic Mind*:
+
+> "The defining characteristic of polymathic cognition is not breadth of
+> knowledge. It is the **simultaneous recognition of structural identity across
+> domains.**"
+
+Not someone who knows eight things instead of one — a different architecture,
+holding structural correspondence in immediate register. The architectural
+translation was direct:
+
+| | |
+|---|---|
+| A specialist memory stores | "Event E happened on date D in domain X." |
+| A polymathic memory stores | "Event E is an instance of pattern P. Pattern P also appears in domains A, B, C." |
+
+**Hindsight (Vectorize.io) was evaluated seriously and deferred** — not on
+capability, on cost and fit. Zero infrastructure and no LLM call during
+consolidation won. It remains a documented option behind two measurable
+triggers: pattern count above ~200 *and* keyword queries visibly missing, or
+manual dedup becoming a chore. **Neither has fired; the index has never held 200
+patterns.**
+
+Then the part nobody planned. It ran in production, the suite stayed green, and
+a human read what it had actually stored: **all 24 promoted patterns were
+quarantined by hand.** They were `casual-greeting`,
+`five-word-salutation`, and `miscounting-words-in-constrained-length-response`
+plus six near-duplicates. A week of real work, and the memory system had
+remembered that agents say "hi".
+
+**182 assertions were green the whole time.** No test could have caught it,
+because every fixture had been tidied by a human. It is now a number in the test
+suite instead of a story.
+
+The full account — including how the filter that resulted is deliberately not
+tightened past 74-of-85 — is in [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md).
 
 ---
 
