@@ -15,7 +15,7 @@
 # `node test/run-tests.mjs`. It exits non-zero when a suite's assertions fail,
 # when a suite reports fewer assertions than its floor in test/suite-floors.mjs
 # (including the empty-suite case, where it reports no count at all), or when
-# the run totals fall under 440 assertions / 14 suites. Verified to exit 1
+# the run totals fall under 548 assertions / 16 suites. Verified to exit 1
 # against broken copies and 0 against a good one; see the commit message for
 # the transcripts. GitHub Actions needs no extra step to honour that — a
 # non-zero exit from a `run:` step fails the job.

@@ -38,8 +38,8 @@ export const SUITE_FLOORS = {
   'test-your-thing.mjs':  12,   // the suite's real measured count
   // ...
 };
-export const TOTAL_ASSERTION_FLOOR = 428;
-export const SUITE_COUNT_FLOOR = 14;
+export const TOTAL_ASSERTION_FLOOR = 548;
+export const SUITE_COUNT_FLOOR = 16;
 ```
 
 Three things to know, because they are the whole reason this mechanism exists:

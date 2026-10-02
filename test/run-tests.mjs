@@ -73,6 +73,21 @@ const strays = entries.filter(
 
 const missing = suites.filter((n) => SUITE_FLOORS[n] === undefined);
 
+// THE INVERSE OF THE CHECK ABOVE, and the half that was missing. `missing`
+// catches a suite with no floor row. Nothing caught the reverse: a floor row
+// whose suite file was DELETED. That row keeps certifying coverage that no
+// longer exists.
+//
+// It is also why pinning SUITE_COUNT_FLOOR alone was not enough. A count floor
+// with any slack tolerates a deletion, and the slack comes back silently every
+// time a suite is added without the floor being raised — which is how this got
+// to two suites' worth of hole. This check has no slack to give back: it is an
+// identity test, not a threshold. Together the two make the directory and the
+// table mutually exhaustive, so neither side can drift without the run failing
+// loudly — and the suite-count floor stays as the net for the one case this
+// cannot see, a suite deleted *together with* its floor row.
+const staleFloors = Object.keys(SUITE_FLOORS).filter((n) => !suites.includes(n));
+
 console.log(c(BOLD, `polymem test harness`) + c(DIM, ` — ${suites.length} suites discovered`));
 
 // A file in test/ that is neither a `test-*.mjs` suite nor known machinery is
@@ -99,10 +114,30 @@ if (missing.length) {
   console.log(c(DIM, '  Add a row with a real measured count before this suite can run.\n'));
 }
 
+// A floor row whose suite is gone is a deleted suite nothing noticed. Without
+// this the row sits in the table looking like a guarantee while nothing runs
+// behind it.
+if (staleFloors.length) {
+  console.log(
+    c(RED, `\n✗ FATAL: ${staleFloors.length} floor row(s) in test/suite-floors.mjs have no suite file:`),
+  );
+  for (const stale of staleFloors) {
+    console.log(
+      c(RED, `    ${stale}`) +
+        c(DIM, ` — the suite was deleted or renamed, but its floor row survived`),
+    );
+  }
+  console.log(
+    c(DIM, '  A row with no suite certifies coverage that does not exist. Delete the row\n') +
+      c(DIM, '  too — and then SUITE_COUNT_FLOOR is the net that stops you.\n'),
+  );
+}
+
 // -------------------------------------------------------------------- run ---
 
 const rows = [];
-let hardFailure = strays.length > 0 || missing.length > 0;
+let hardFailure =
+  strays.length > 0 || missing.length > 0 || staleFloors.length > 0;
 
 for (const name of suites) {
   const path = join(TEST_DIR, name);

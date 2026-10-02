@@ -137,12 +137,25 @@ export const SUITE_FLOORS = {
 // structurally CANNOT see.
 //
 // DELETING AN ENTIRE SUITE is invisible to per-suite floors — remove a file
-// and the remaining seven all still clear their own floors, so the run is
-// green with a hole in it. A total-assertion floor and a suite-count floor
-// close that. Between them: gutted suite, deleted suite, and a new suite that
-// was never registered all fail loudly.
-export const TOTAL_ASSERTION_FLOOR = 440;
-export const SUITE_COUNT_FLOOR = 14;
+// and the remaining ones all still clear their own floors, so the run is green
+// with a hole in it. A total-assertion floor and a suite-count floor close
+// that. Between them: gutted suite, deleted suite, and a new suite that was
+// never registered all fail loudly.
+//
+// BOTH FLOORS ARE PINNED TO THE MEASURED COUNT, and they have to stay that
+// way. These were 440 / 14 against a real 548 / 16 — slack of 108 assertions
+// and TWO whole suites, so `rm test/test-repo-root-containment.mjs` left
+// `npm test` green, and so did deleting a second suite after it. A floor that
+// rots upward is worse than no floor at all: every suite added without
+// raising it widens the hole, and nothing announces the decay. `docs:check`
+// caught it, but only because the README quotes a measured count — that is
+// the compound net working by accident, not this floor doing its job.
+//
+// So: anyone who adds a suite raises SUITE_COUNT_FLOOR in the same commit.
+// That is the friction this file already argues for, not a new cost of it —
+// and CONTRIBUTING.md's PR checklist asks for exactly this.
+export const TOTAL_ASSERTION_FLOOR = 548;
+export const SUITE_COUNT_FLOOR = 16;
 
 // Files in test/ that are machinery, not suites. Listed explicitly so the
 // runner can require every OTHER *.mjs to be a real `test-*.mjs` suite —
