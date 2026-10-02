@@ -11,6 +11,29 @@ Version `0.x` means the API may still change. Nothing here is stable yet.
 
 ### Fixed
 
+- **A test suite that forged its own result could turn CI green while testing
+  nothing.** The floors in `test/suite-floors.mjs` trust a number the suite
+  itself prints, so a suite that imports nothing from `src/` could print green
+  checkmarks and a well-formed result line and satisfy every check. Measured on
+  a clean clone: `grep -c 'src/'` on the suite was `0`, and `npm test` and
+  `npm run docs:check` both exited 0. The runner now cross-checks the reported
+  count against the assertion lines actually emitted, **and** asks V8 coverage
+  whether the suite executed any library code — a signal a suite cannot print.
+  All 17 suites execute 2-3 `src/` files each; a forged suite executes none, and
+  the run now exits 1. `test/test-forged-suite-detection.mjs` (11 assertions)
+  forges a result line in a throwaway repo and asserts the runner refuses it,
+  including a variant whose `✓` lines match its lie exactly — that one clears
+  the count check and is caught only by coverage.
+  This defeats *deliberate* forgery of a suite's result. It does not make the
+  harness forgery-proof: a forger who genuinely calls one library function and
+  lies about everything else still clears the gate, and there is still no
+  coverage *threshold*. What is now enforced is the durable, weaker claim — the
+  suite ran the library.
+  Costs ~13% wall clock (measured: 26.7s/28.7s on vs 24.1s/25.0s off over two
+  runs each) and ~40MB of coverage JSON, deleted per suite.
+  `POLYMEM_SKIP_COVERAGE_GATE=1` disables the coverage check for local
+  iteration and prints a warning banner; never set it in CI.
+
 - **A model that quoted the fence opener in its prose lost the entire memory
   block, and lost part of its answer with it.** `parseMemoryBlock` located the
   block with `text.indexOf('```memory')` — the first occurrence of that substring

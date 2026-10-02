@@ -93,6 +93,11 @@ export const SUITE_FLOORS = {
   'test-concurrent-writes.mjs':      13,
   'test-concurrency-rmw.mjs':       23,
   'test-encryption-at-rest.mjs':    66,
+  // The anti-forgery regression. This suite is what keeps the coverage gate
+  // from being "simplified" away: it forges a result line in a throwaway repo
+  // and asserts the runner refuses it. Gutting this suite would reopen the
+  // hole, which is why it has a floor like anything else.
+  'test-forged-suite-detection.mjs': 11,
   'test-memory-index-location.mjs':   8,
   // Six trust-model defects, each proven to fail before its fix. The floor is
   // the count that must survive: if a later edit silences one of these
@@ -154,8 +159,8 @@ export const SUITE_FLOORS = {
 // So: anyone who adds a suite raises SUITE_COUNT_FLOOR in the same commit.
 // That is the friction this file already argues for, not a new cost of it —
 // and CONTRIBUTING.md's PR checklist asks for exactly this.
-export const TOTAL_ASSERTION_FLOOR = 548;
-export const SUITE_COUNT_FLOOR = 16;
+export const TOTAL_ASSERTION_FLOOR = 559;
+export const SUITE_COUNT_FLOOR = 17;
 
 // Files in test/ that are machinery, not suites. Listed explicitly so the
 // runner can require every OTHER *.mjs to be a real `test-*.mjs` suite —
@@ -166,6 +171,10 @@ export const NON_SUITE_FILES = new Set([
   'harness.mjs',
   'suite-floors.mjs',
   'run-tests.mjs',
+  // The anti-forgery gate. Machinery: it reads coverage profiles and decides
+  // whether a suite ran the library. It asserts nothing about the library, so
+  // it is not a suite and must not be counted as one.
+  'coverage-gate.mjs',
 ]);
 
 export const SUITE_GLOB_PREFIX = 'test-';

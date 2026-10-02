@@ -33,11 +33,13 @@
 //     reading top to bottom.
 
 import { spawnSync } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { RESULT_PREFIX } from './harness.mjs';
+import { disableFlagName, isGateEnabled, srcFilesExecuted } from './coverage-gate.mjs';
 import {
   NON_SUITE_FILES,
   SUITE_COUNT_FLOOR,
@@ -47,6 +49,7 @@ import {
 } from './suite-floors.mjs';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(TEST_DIR, '..');
 
 // A suite that hangs must not hang CI forever.
 const SUITE_TIMEOUT_MS = 120_000;
@@ -139,15 +142,36 @@ const rows = [];
 let hardFailure =
   strays.length > 0 || missing.length > 0 || staleFloors.length > 0;
 
+const COVERAGE_GATE_ON = isGateEnabled();
+
+if (!COVERAGE_GATE_ON) {
+  console.log(
+    c(RED, `\n✗ WARNING: ${disableFlagName()}=1 — the forged-suite coverage gate is DISABLED.`),
+  );
+  console.log(
+    c(DIM, '  A suite can report any assertion count it likes without running the\n') +
+      c(DIM, '  library. Never set this in CI; it exists for local iteration only.\n'),
+  );
+}
+
 for (const name of suites) {
   const path = join(TEST_DIR, name);
   const floor = SUITE_FLOORS[name];
 
+  // Coverage goes to a fresh temp dir per suite, so profiles cannot leak
+  // between suites and a suite cannot be credited with another's library calls.
+  const covDir = COVERAGE_GATE_ON ? mkdtempSync(join(tmpdir(), 'polymem-cov-')) : null;
+
   const proc = spawnSync(process.execPath, [path], {
-    cwd: resolve(TEST_DIR, '..'),
+    cwd: REPO_ROOT,
     encoding: 'utf8',
     timeout: SUITE_TIMEOUT_MS,
     maxBuffer: 32 * 1024 * 1024,
+    // NODE_V8_COVERAGE is what makes the engine record which functions ran.
+    // Node propagates it to child_process spawns even when the child is given
+    // an explicit env (verified on node 18/20/26) — which matters, because nine
+    // of the sixteen suites only reach src/ through a child process.
+    env: covDir ? { ...process.env, NODE_V8_COVERAGE: covDir } : process.env,
   });
 
   const stdout = proc.stdout || '';
@@ -232,6 +256,72 @@ for (const name of suites) {
     const exitOk = proc.status === 0;
     if (reported.fail > 0 && exitOk) {
       problems.push(`reported ${reported.fail} failure(s) but exited 0 — harness is inconsistent`);
+    }
+
+    // 5. THE EMITTED-LINE CROSS-CHECK. The result line is a CLAIM; the `✓`/`✗`
+    //    lines are the suite's own account of what it did. Comparing them
+    //    catches a forger who reports a count it never emitted.
+    //
+    //    Honest scope, measured: this alone does NOT close the hole. A forger
+    //    who prints one `✓` per asserted lie satisfies it exactly — verified,
+    //    see test/test-forged-suite-detection.mjs, which forges five matching
+    //    lines and is caught only by check 6. This check is kept because it is
+    //    free and catches the cruder forgeries; it is not the gate.
+    const passLines = stdout.split('\n').filter((l) => /^ {2}✓ /.test(l)).length;
+    const failLines = stdout.split('\n').filter((l) => /^ {2}✗ /.test(l)).length;
+    if (passLines !== reported.pass) {
+      problems.push(
+        `reported pass=${reported.pass} but emitted ${passLines} passing assertion line(s) — ` +
+          `the count and the output disagree`,
+      );
+    }
+    if (failLines !== reported.fail) {
+      problems.push(
+        `reported fail=${reported.fail} but emitted ${failLines} failing assertion line(s) — ` +
+          `the count and the output disagree`,
+      );
+    }
+  }
+
+  // 6. THE COVERAGE GATE — the check with teeth. Everything above trusts
+  //    something the suite printed; this asks the ENGINE whether the library
+  //    ran. A suite that forges its result line cannot forge a coverage range:
+  //    to have one, it has to genuinely call src/ code. Measured at bdce4bb,
+  //    all 16 healthy suites execute 2-3 src files each and a forged suite
+  //    executes none. See test/coverage-gate.mjs for the full evidence,
+  //    including why this aggregates child profiles and why that holds on
+  //    node 18/20.
+  //
+  //    Only meaningful for a suite that otherwise claims success: a suite
+  //    already failing for another reason has told us it is broken, and adding
+  //    a second diagnosis for the same file is noise.
+  if (covDir) {
+    // try/finally: a throw while reading the profiles must not skip the
+    // delete, or a throwing gate accumulates ~40MB of coverage JSON per suite
+    // in tmpdir for the rest of the run. (A SIGKILLed runner still leaks — the
+    // measured 78 stale dirs on this machine were from runs I killed — so this
+    // only covers the in-process paths, not an aborted CI job.)
+    let instrumented = false;
+    let files = [];
+    try {
+      ({ instrumented, files } = srcFilesExecuted(covDir, REPO_ROOT));
+    } finally {
+      rmSync(covDir, { recursive: true, force: true });
+    }
+    if (!instrumented) {
+      // Not the same as "ran nothing". No profile at all means the measurement
+      // itself failed, which is a problem with this runner, not evidence about
+      // the suite. Never let a broken measurement read as a forged suite.
+      problems.push(
+        'coverage produced no profile for this suite — the forgery gate could not ' +
+          'evaluate it. Treat this runner as broken, not the suite.',
+      );
+    } else if (files.length === 0 && problems.length === 0) {
+      problems.push(
+        'executed NO code in src/ yet reported a passing result — a suite that ' +
+          'never runs the library can print any assertion count it likes. ' +
+          'This is the forged-suite shape (see test/coverage-gate.mjs).',
+      );
     }
   }
 
