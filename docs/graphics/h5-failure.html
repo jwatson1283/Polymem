@@ -1,0 +1,88 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1080px;height:1920px;overflow:hidden;background:#D9D9D4;
+     font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#111716}
+.sheet{width:1080px;height:1920px;padding:52px 52px 40px;position:relative;
+       display:flex;flex-direction:column}
+/* press grain + faint misregistration, per photographic_direction.finish */
+.sheet::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.13;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
+
+.display{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:800;
+  font-size:150px;line-height:.86;letter-spacing:-.045em;text-transform:uppercase;
+  color:#111716}
+.mono{font-family:'SF Mono',Menlo,monospace}
+.meta{font-family:'SF Mono',Menlo,monospace;font-size:17px;line-height:1.42;
+  letter-spacing:.01em;color:#4D504E}
+.lab{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;
+  font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#111716}
+
+.grid{margin-top:26px;display:grid;gap:0;flex:1;
+  grid-template-columns:repeat(4,1fr);grid-auto-rows:min-content}
+.cell{border:1.5px solid #111716;padding:15px 14px 17px;position:relative;
+  display:flex;flex-direction:column;justify-content:flex-start}
+.cell.empty{background:transparent}
+.span2{grid-column:span 2}
+.span4{grid-column:span 4}
+.v{display:flex;flex-direction:column;justify-content:space-between}
+
+.warn{border:3px solid #D71920}
+.warn .lab{color:#D71920}
+.warn .big{font-size:58px;font-weight:800;letter-spacing:-.03em;color:#D71920;
+  font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;line-height:.95}
+
+.strip{height:15px;display:flex;margin-top:16px}
+.strip i{flex:1;display:block}
+.foot{margin-top:14px;display:flex;justify-content:space-between;
+  font-family:'SF Mono',Menlo,monospace;font-size:16px;color:#4D504E}
+
+
+  .grid{grid-template-columns:repeat(3,1fr)}
+  .cell{padding:22px 20px 24px}
+  .plain{font-size:28px;line-height:1.34;margin-top:12px;font-weight:600}
+  .huge{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:800;
+    font-size:88px;line-height:.88;letter-spacing:-.04em;color:#D71920}
+</style></head><body><div class="sheet">
+  <div class="meta">POLYMEM / SHEET 05 — THE WEEK IT FAILED</div>
+  <div class="display" style="margin-top:16px;font-size:110px">A WEEK<br>OF REAL<br>WORK</div>
+
+  <div class="grid" style="margin-top:26px">
+    <div class="cell span3">
+      <div class="lab">EVERYTHING IT LEARNED</div>
+      <div class="plain" style="font-size:34px;line-height:1.44">
+        &ldquo;casual greeting&rdquo; &nbsp;&middot;&nbsp; &ldquo;five-word salutation&rdquo;<br>
+        &ldquo;the user prefers concise responses&rdquo;<br>
+        &ldquo;miscounts words in short answers&rdquo; &nbsp;<span style="color:#8A8578">+6 more</span></div>
+    </div>
+
+    <div class="cell warn">
+      <div class="lab">WHAT IT SHOULD HAVE LEARNED</div>
+      <div class="plain" style="color:#111716">How to write without racing.
+        How to deploy without breaking prod.<br>
+        How to tell a real fix from a tidy diff.</div>
+    </div>
+    <div class="cell">
+      <div class="lab">TESTS GREEN?</div>
+      <div class="huge">559</div>
+      <div class="meta" style="margin-top:10px;color:#111716">and every one of them
+        used a fixture a human had tidied first.</div>
+    </div>
+    <div class="cell">
+      <div class="lab">HOW WE FOUND OUT</div>
+      <div class="plain">A person read the file.<br>
+        The tests never would have.</div>
+    </div>
+
+    <div class="cell span2">
+      <div class="lab">WHAT CHANGED BECAUSE</div>
+      <div class="plain">The noise is now rejected by the system itself, not by hope.
+        And the number that used to be a story is a number in the test suite.</div>
+    </div>
+    <div class="cell empty"></div>
+  </div>
+
+  <div class="strip mono"><i style="background:#111716"></i><i style="background:#D71920"></i>
+    <i style="background:#E1C51A"></i><i style="background:#1C4FA3"></i></div>
+  <div class="foot"><span>github.com/jwatson1283/Polymem</span>
+    <span>NO TEST SUITE CATCHES A BAD ASSUMPTION.</span></div>
+</div></body></html>

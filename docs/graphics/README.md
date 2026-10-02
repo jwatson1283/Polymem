@@ -59,3 +59,20 @@ Numbers still come from the shipped repo and the shipped tests. `h3` says "7 of
 it is a real observed value, not a single fabricated run. If asked for the
 typical case, the answer is 3 of 8, and the card should say so rather than
 quietly quote the scarier number.
+
+---
+
+## Origin set (h4 / h5)
+
+Built from the **origin story**, not the product stats — because the story is the
+more interesting artefact and GitHub now carries it in the README.
+
+- `h4-origin` — the Gunter finding that the whole project came from, the
+  specialist-vs-polymathic memory contrast, and Hindsight recorded as
+  **deferred rather than rejected**.
+- `h5-failure` — the week it ran in production and learned that agents say "hi".
+
+Every claim on both cards traces to `docs/HOW-IT-WORKS.md`, which in turn cites
+Professor's session `20260817_174314_992db4` (2026-09-23) and the shipped README.
+The `559` on h5 is the current suite size and will move; re-check it against
+`npm test` before re-recording.
